@@ -66,9 +66,6 @@ def vae_loss(recon_x, x, mu, logvar, seq_length):
     return BCE + KLD
 
 
-import torch
-import torch.nn as nn
-
 
 class Autoencoder(nn.Module):
     def __init__(self, seq_length, latent_dim):
@@ -98,3 +95,80 @@ class Autoencoder(nn.Module):
         return decoded
     
 
+
+
+class CNNLSTMEmbeddingNet(nn.Module):
+    def __init__(self, input_length, num_channels, embedding_dim=64):
+        super(CNNLSTMEmbeddingNet, self).__init__()
+        
+        # Convolutional layers
+        self.conv1 = nn.Conv1d(in_channels=num_channels, out_channels=16, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv1d(in_channels=16, out_channels=32, kernel_size=3, padding=1)
+        self.pool = nn.MaxPool1d(2)
+        
+        # Calculate the output size after the convolutional layers
+        conv_output_size = input_length // 2 // 2  # Two pooling layers
+        
+        # LSTM layer
+        self.lstm = nn.LSTM(input_size=32, hidden_size=64, num_layers=1, batch_first=True)
+        
+        # Fully connected layer to produce embeddings
+        self.fc = nn.Linear(64 * conv_output_size, embedding_dim)
+        
+    def forward(self, x):
+        # Ensure x has three dimensions: (batch_size, sequence_length, num_channels)
+        if x.dim() == 2:
+            x = x.unsqueeze(-1)  # Adds a third dimension at the end (num_channels=1)
+
+        # Correcting the initial transpose operation to fit Conv1d expectation
+        x = x.transpose(1, 2)  # Now shape (batch_size, num_channels=1, sequence_length)
+        
+        # Convolutional layers with ReLU and pooling
+        x = torch.relu(self.conv1(x))
+        x = self.pool(x)
+        x = torch.relu(self.conv2(x))
+        x = self.pool(x)
+
+class EnhancedCNNBiLSTM(nn.Module):
+    def __init__(self, input_length, num_channels, embedding_dim=128):
+        super(EnhancedCNNBiLSTM, self).__init__()
+        
+        self.conv1 = nn.Conv1d(in_channels=num_channels, out_channels=32, kernel_size=100, padding=50)
+        nn.init.kaiming_normal_(self.conv1.weight, nonlinearity='relu')
+        self.conv2 = nn.Conv1d(in_channels=32, out_channels=64, kernel_size=100, padding=50)
+        nn.init.kaiming_normal_(self.conv2.weight, nonlinearity='relu')
+        self.pool = nn.MaxPool1d(kernel_size=2, stride=2)
+
+        # Dropout layer
+        self.dropout = nn.Dropout(p=0.1)
+
+        # Adding LSTM layer. The number of input features to the LSTM is the number of output channels from the last conv layer.
+        # Assuming the output from the pooling layer is properly reshaped for the LSTM input.
+        conv_output_size = input_length // 4  # Adjust based on your pooling and convolution strides
+        self.lstm = nn.LSTM(input_size=64, hidden_size=128, num_layers=1, batch_first=True, bidirectional=False)
+
+        # The output of LSTM is (batch_size, seq_len, num_directions * hidden_size)
+        # Flatten LSTM output and feed into the fully connected layer to get embeddings
+        self.fc = nn.Linear(conv_output_size * 128, embedding_dim)  # Adjust the input feature size accordingly
+
+    def forward(self, x):
+        # Ensure x has three dimensions: (batch_size, sequence_length, num_channels)
+        if x.dim() == 2:
+            x = x.unsqueeze(-1)  # Adds a third dimension at the end (num_channels=1)
+        x = x.transpose(1, 2)  # Assuming input shape is (batch_size, num_channels, seq_len)
+        x = F.relu(self.conv1(x))
+        x = self.pool(x)
+        x = F.relu(self.conv2(x))
+        x = self.pool(x)
+        x = self.dropout(x)
+
+        x = x.transpose(1, 2)  # Adjust for LSTM, shape becomes (batch_size, seq_len, input_size)
+        lstm_out, _ = self.lstm(x)
+
+        # Flatten the output for the fully connected layer
+        lstm_out_flattened = lstm_out.reshape(lstm_out.shape[0], -1)
+
+        # Fully connected layer to produce embeddings
+        embeddings = self.fc(lstm_out_flattened)
+
+        return embeddings

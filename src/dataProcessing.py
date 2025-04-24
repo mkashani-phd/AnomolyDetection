@@ -15,12 +15,12 @@ class IQdata:
     2462000000,2464000000,2466000000,2468000000,2470000000,2472000000,
     2474000000,2476000000,2478000000,2402000000,2426000000,2480000000])
 
-    onBodyMap = {1: ['head','right'],              2: ['head','left'], 
+    onBodyMap = { 1: ['head','right'],              2: ['head','left'], 
                   3: ['chest', 'right'],            4: ['chest', 'left'],
                   5: ['fornTorso', 'right'],        6: ['fornTorso', 'left'],
                   7: ['arm', 'right'],              8: ['arm', 'left'],
                   9: ['wrist', 'right'],           10: ['wrist', 'left'],
-                  11: ['backTorso', 'right'],      12: ['backTorso', 'left']}
+                 11: ['backTorso', 'right'],       12: ['backTorso', 'left']}
 
 
 
